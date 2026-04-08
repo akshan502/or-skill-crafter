@@ -63,6 +63,7 @@ user-invocable: true
 - **规范/知识**: `references/[文件名].md`
 - **模板/格式**: `assets/[文件名].md`
 - **自动化工具**: `scripts/[脚本名]`
+- **评测样例（可选）**: `evals/[文件名].json`
 
 ## 执行步骤 (Pipeline)
 ### Step 1: 分析阶段
@@ -76,16 +77,55 @@ user-invocable: true
 - [当工具不可用时怎么办]
 - [当输入不足时怎么办]
 
+## 输出要求
+- [输出物 1]
+- [输出物 2]
+
 ## 边界约束 (Hard Constraints)
 - [绝对禁止做的事项 1]
 - [绝对禁止做的事项 2]
 - [禁止把运行时数据写回 skill 本体目录]
 """
+        skill_yaml_stub = f"""skill:
+  name: {clean_name}
+  version: v3
+  type: writer
+  user_invocable: true
+
+intent:
+  goal: [该技能的核心目标]
+  primary_input: [核心输入]
+  primary_output: [核心输出]
+  constraints:
+    - [关键约束]
+
+patterns:
+  - inversion
+  - generator
+
+flow:
+  - id: clarify
+    condition: missing_context
+    action: ask_questions
+
+fallback:
+  insufficient_info: ask_more
+  out_of_scope: refuse
+
+output:
+  format: markdown
+  sections:
+    - [section-name]
+
+boundaries:
+  - do not write runtime data back into the skill directory
+"""
         write_file_if_missing(os.path.join(base_dir, 'SKILL.md'), skill_stub)
+        write_file_if_missing(os.path.join(base_dir, 'skill.yaml'), skill_yaml_stub)
 
         print(f"✅ 成功初始化 ADK 技能目录: {base_dir}")
         print("📁 包含子目录: scripts/, references/, assets/")
-        print("📝 已创建基础 SKILL.md（若原文件不存在）")
+        print("📝 已创建基础 SKILL.md 与 skill.yaml（若原文件不存在）")
         print("ℹ️ evals/ 为可选目录，按需手动添加")
     except Exception as e:
         print(f"❌ 创建目录失败: {e}", file=sys.stderr)

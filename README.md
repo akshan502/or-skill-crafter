@@ -21,6 +21,7 @@
 - 减少提示词越写越乱的问题
 - 让 references / assets / scripts 各归其位
 - 在生成前先澄清，在交付前先自检
+- 在 v3 中引入 **skill taxonomy + pattern selection + skill.yaml DSL**
 
 ---
 
@@ -244,23 +245,171 @@ python scripts/init_workspace.py "your-skill-name"
 
 ---
 
+## v3 设计方向
+
+`or-skill-crafter` 正在从“模板器”升级为 **Pattern-aware Skill Compiler**。
+
+v3 首批重点包括：
+
+- **Skill taxonomy**：先判断 skill 类型，再决定生成策略
+- **Pattern selection**：显式选择 inversion / generator / reviewer / pipeline / tool-wrapper
+- **`skill.yaml` DSL**：在需求分析与文件生成之间加入统一中间表示
+- **目录职责清晰化**：把规则、模板、脚本、评测进一步拆清
+- **validator / migration 预留**：为后续结构校验、语义校验、旧 skill 迁移打基础
+
+当前仓库已补入的 v3 基础文件：
+
+- `references/skill-taxonomy.md`
+- `references/pattern-selection.md`
+- `references/v3-roadmap.md`
+- `references/dsl-to-artifacts-mapping.md`
+- `references/migration-to-compile-workflow.md`
+- `references/compile-merge-guide.md`
+- `dsl-skill-schema.md`
+- `assets/skill-yaml-example.yaml`
+- `assets/file-responsibility-template.md`
+- `assets/migration-report-template.md`
+- `assets/templates/writer-skill-template.md`
+- `assets/templates/analyzer-skill-template.md`
+- `assets/templates/tool-wrapper-skill-template.md`
+- `assets/templates/transformer-skill-template.md`
+- `assets/templates/orchestrator-skill-template.md`
+- `assets/templates/builder-skill-template.md`
+- `validators/structure.py`
+- `validators/semantics.py`
+- `validators/patterns.py`
+- `migrations/legacy-to-v3-plan.md`
+- `scripts/migrate_skill.py`
+- `scripts/compile_skill.py`
+- `evals/v3-evals.json`
+- `evals/compile-evals.json`
+
 ## 项目状态
 
-当前版本重点解决的是：
+当前仓库处于 **v2 → v3 迁移期**。
+
+已经具备：
 
 - 目录型技能生成
 - 渐进式披露
 - 门控式流水线
 - 更严格的自检机制
-- 更清晰的目录与边界规范
+- 初步的 v3 taxonomy / pattern / DSL 基础
 
-后续仍可继续完善，比如：
+后续仍需继续完善：
 
-- 更丰富的模板库
+- validator 深化（更多规则与 smoke test）
+- compile 链路从“生成草案 + 推荐文件 + stub 文件”走向“正式生成目录产物”
+- migration（从报告 + `skill.yaml.draft` 走向自动拆分建议）
 - 更强的评测样例
-- 更多技能类型的脚手架支持
+- tool-wrapper 类型的更细契约模板
+- compile 结果与现有 `SKILL.md` 的差异比对机制
+- compile 输出的 references/assets 内容继续细化到业务级模板
+
+阶段总结见：`final-status-v3-alpha.md`
 
 ---
+
+## 文件职责表（v3）
+
+### 根目录
+- `SKILL.md`：主行为定义，保持精简，只放角色、适用范围、Pipeline、门控、边界。
+- `skill.yaml`：统一的中间表示（DSL），供生成、校验、迁移使用。
+- `CHANGELOG.md`：版本变更记录。
+
+### `references/`
+放规则、知识、rubric、checklist、方法说明。
+
+### `assets/`
+放输出模板、示例骨架、few-shot 示例、格式模板。
+
+### `scripts/`
+放初始化、验证、迁移等辅助自动化脚本。
+
+目前已有：
+- `scripts/init_workspace.py`
+- `scripts/validate_skill.py`
+- `scripts/migrate_skill.py`
+- `scripts/compile_skill.py`
+
+### `evals/`
+放行为样例、对抗样例、回归样例。
+
+### 不该放进 skill 目录的内容
+- 日志
+- 缓存
+- 用户偏好
+- 临时状态
+- 执行结果
+
+这些应放到独立数据目录，而不是 skill 本体目录。
+
+## `skill.yaml` DSL 初版示例
+
+```yaml
+skill:
+  name: prd-reviewer
+  version: v3
+  type: analyzer
+  user_invocable: true
+
+intent:
+  goal: review PRD quality and provide actionable feedback
+  primary_input: PRD text or document content
+  primary_output: score, issues, and revision suggestions
+  constraints:
+    - ask clarifying questions when context is insufficient
+
+patterns:
+  - inversion
+  - reviewer
+  - generator
+  - pipeline
+
+flow:
+  - id: clarify
+    condition: missing_context
+    action: ask_questions
+
+  - id: analyze
+    references:
+      - references/prd-rubric.md
+
+  - id: score
+    assets:
+      - assets/score-template.md
+
+fallback:
+  insufficient_info: ask_more
+  tool_unavailable: manual_mode
+  out_of_scope: refuse
+
+output:
+  format: markdown
+  sections:
+    - summary
+    - issues
+    - suggestions
+
+boundaries:
+  - do not fabricate missing product context
+  - do not write runtime data back into the skill directory
+```
+
+完整说明见：`dsl-skill-schema.md`
+
+补充映射规则见：`references/dsl-to-artifacts-mapping.md`
+
+当前已经有一个最小编译骨架：`scripts/compile_skill.py`
+- 读取 `skill.yaml`
+- 根据 `skill.type` 选择模板
+- 吃入 `intent / flow / fallback / boundaries / output.sections`
+- 生成 `compile-plan.md`
+- 生成 `SKILL.generated.md`
+- 生成 `references/recommended-files.md`
+- 生成 `assets/recommended-files.md`
+- 按 pattern / type 生成一批 `references/*.md` 与 `assets/*.md` 草案
+- 生成 `compile-review.md` 作为收敛与人工确认说明
 
 ## English Summary
 

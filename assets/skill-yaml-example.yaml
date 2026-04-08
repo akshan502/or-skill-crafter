@@ -1,0 +1,58 @@
+skill:
+  name: prd-reviewer
+  version: v3
+  type: analyzer
+  user_invocable: true
+
+intent:
+  goal: review PRD quality and provide actionable feedback
+  primary_input: PRD text or document content
+  primary_output: score, issues, and revision suggestions
+  constraints:
+    - ask clarifying questions when context is insufficient
+    - do not give final verdict without enough evidence
+
+patterns:
+  - inversion
+  - reviewer
+  - generator
+  - pipeline
+
+flow:
+  - id: clarify
+    condition: missing_context
+    action: ask_questions
+
+  - id: analyze
+    references:
+      - references/prd-rubric.md
+
+  - id: score
+    assets:
+      - assets/score-template.md
+
+  - id: suggest
+    assets:
+      - assets/revision-template.md
+
+  - id: self_review
+    references:
+      - references/review-checklist.md
+
+fallback:
+  insufficient_info: ask_more
+  tool_unavailable: manual_mode
+  out_of_scope: refuse
+
+output:
+  format: markdown
+  sections:
+    - summary
+    - issues
+    - score
+    - suggestions
+
+boundaries:
+  - do not fabricate missing product context
+  - do not modify external systems without confirmation
+  - do not write runtime data back into the skill directory
